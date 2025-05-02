@@ -1,0 +1,172 @@
+---
+title: "Replication: Campana et al. 2025"
+output: html_document
+date: "2025-04-30"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Short Description of Paper
+
+Campana et al 2025 examines changes in cod population characteristics over the past 1100 years, and seeks to explain their causes. Specifically, they attribute the trend towards younger, smaller cod to increased overfishing over the centuries. The data that they used includes a large set of fossil otoliths, which are a small bone structure in the inner ear, from over the centuries, which were used to estimate fish characteristics such as length. They also used data from a modern fishery, which also included length among other characteristics, but unfortunately only the otolith datasets were made public on dryad. The study used several linear models in order to examine how various factors related to cod have changed over time. However, what I have specifically chosen to replicate is as follows: the percentage of otoliths which originate from each century (descriptive statistic), a linear model of cod length ~ time (inferential statistic), and a histogram depicting cod length over time. 
+
+# Packages 
+```{r}
+options(repos = c(CRAN = "https://cran.rstudio.com"))
+install.packages("emmeans")
+library(emmeans)
+library(readr)
+library(ggplot2)
+```
+
+# Importing the Data 
+
+There are three data sets available on Dryad for this paper. Let's import them.
+```{r}
+library(readr)
+
+#importing the first data set: modern + archaeological (modern: otoliths from fishery; archaelogical: otoliths that were dug up)
+file1 <- ("https://raw.githubusercontent.com/matteofinnerty/mfinn13-BI588-Replication/refs/heads/main/otoliths_modern_and_archaeological_for_length_and_age_Campana%20(2).csv") 
+cod_data1 <- read.csv(file1, sep = ",", header = T)
+
+#importing second data set: just archaeological (only the dug up otoliths)
+file2 <- ("https://raw.githubusercontent.com/matteofinnerty/mfinn13-BI588-Replication/refs/heads/main/otoliths_archaeological_Campana%20(2).csv") 
+cod_data2 <- read.csv(file2, sep = ",", header = T)
+
+#importing third data set: cod estimates by century (shorter dataset containing summary stats about cod from each century)
+file3 <- ("https://raw.githubusercontent.com/matteofinnerty/mfinn13-BI588-Replication/refs/heads/main/cod_estimates_by_century_Campana%20(2).csv") 
+cod_data3 <- read.csv(file3, sep = ",", header = T)
+```
+
+# Descriptive Statistic: percentage of otoliths from each century
+In the second paragraph of the results section, the authors report: "Most of the otoliths were associated with the 15th century (31%), but 18% derived from the 10th to 14th centuries, and 51% from the 16th century and later." Let's see if we can replicate this.
+
+We are going to use the cod_data2 dataset, because this dataset includes only the archaeological otoliths, which is what they are talking about in this section.
+
+Let's pretend we were doing this from scratch and did not know that most of the otoliths were from the 15th century. Lets create a data frame which shows the number of otoliths from each century, as well as the proportion of overall otoliths for each century. 
+```{r}
+otoliths_by_century <- NULL #this object will hold our otolith counts 
+
+#this for loop creates a temporary data frame containing only cod otoliths from the ith century, and counts them via the nrow() function.
+for (i in 10:21){
+  df_temp <- NULL #temporary data frame which we will use the nrow() function on in order to get an otolith count
+  df_temp <- subset(cod_data2, Century == i) #creates a temporary dataset with cod only from the ith century
+  otoliths_by_century[i-9] <- nrow(df_temp) #takes the number of rows of the temporary dataset, which is basically just a count of them. using i-9 because we are starting i at 10
+}
+
+#creating a dataframe for easy visualization
+df_otoliths <- data.frame(century = c(10,11,12,13,14,15,16,17,18,19,20,21), otolithCount = otoliths_by_century, percent = 100*otoliths_by_century/nrow(cod_data2))
+df_otoliths
+```
+From this we can see that the 15th century does have about 31% of the otoliths, but let's check to see if the other reported percentages are also true. 
+```{r}
+#calculating/assigning the correct percentage using the data frame we just created
+percent_10th_to_14th <- sum(df_otoliths[1:5, 3]) #adds the percentages from the 10th through 14th centuries
+percent_10th_to_14th
+
+percent_16th_onward <- sum(df_otoliths[7:12, 3]) #adds the percentages from the 16th through 21st centuries
+percent_16th_onward
+
+percent_15th <- df_otoliths[6,3] #extracts the percentage of the 15th century
+
+paste("From my calculations, ", percent_15th, " percent of the otoliths were from the 15th century, ", percent_10th_to_14th, " percent were from the 10th to 14th centuries, and ", percent_16th_onward, " percent were from the 16th century and later. This closely matches the reported values from the paper.", sep = "")
+
+```
+
+
+# Inferential Statistic: linear model of length ~ century 
+In the paper, the authors write "Estimated cod length [estimated marginal mean (EMM) from a general linear model (GLM)] declined significantly between the 10th and 21st centuries, with the largest decline taking place after the 18th century (GLM, P < 0.001, 872 df, R2 = 0.21)". 
+
+Let's see if we can replicate this analysis.
+
+At first I tried running a GLM using the glm() function, but then I noticed in the methods section the following quote: "GLMs were fit with the lm function in R (77), whereas expected marginal means were generated with the emmeans function (78)." So they were really just running a linear regression, which *is* technically a type of GLM. 
+
+```{r}
+#fitting the linear regression
+cod_length_lm <- lm(data = cod_data1, formula = Length_cm ~ as.factor(Century))
+summary(cod_length_lm)
+```
+From this linear regression, we get almost the exact same results that the paper describes. The paper claims that cod length significantly decreased between the 10th and 21st century, which we can see at the bottom, where beta-1 for the 21st century equals -11.345 and p = 1.35e-06. Furthermore, the adjusted R-squared value is equal to 0.208, which rounds to 0.21, which was the reported R-squared value. However, this regression reports 837 degrees of freedom while the paper reports 872, which is confusing because the data set does not even have 872 rows, so it is unclear where that additional data is coming from.
+
+We do need to check, though, that the assumptions of linear regression are met. There are 2 in particular we should check.
+
+1. That y is a linear function of x, and that we have homoscedasticity.
+```{r}
+resid_plot <- ggplot(mapping = aes(x = fitted(cod_length_lm), y = resid(cod_length_lm)))+ 
+  geom_point()+
+  labs(x = "Fitted Values", y = "Residuals")+
+  geom_smooth(method = "lm")
+resid_plot
+
+paste("From this, we can see that there is no pattern to the residuals, demonstrating linearity, as well as even variation (spread) in the residuals across values of x.")
+```
+2. That the residuals are normally distibuted
+```{r}
+# QQ plot for normality check
+qqnorm(resid(cod_length_lm))
+qqline(resid(cod_length_lm))
+
+paste("Visually, the residuals do seem to be normally distributed.")
+```
+The assumptions of linear regression are met.
+
+The paper also mentions comparing estimated marginal means, which are predictions of the mean response for each level of factor based on the model. So in our case, this would mean the mean cod length for each century based on the linear regression. EMMs can be calculated with the emmeans() function from the {emmeans} package, and the arguments it takes are the model that we ran, and the predictor variable(s) we are interested in. 
+```{R}
+#comparing EMMs 
+emmeans(cod_length_lm, ~ Century) 
+```
+This output further corroborates what the paper reported. We see a decrease in the estimated marginal mean from 76 in the 10th century to 64.6 in the 21st century. Furthermore, in the quote above, the paper mentions that the greatest drop in length occurs in after the 18th century. This can be seen in our emmeans() output, where the greatest drop in EMM between any two adjacent years is 14.0, between century 18 and 19. 
+
+While I still don't understand where the paper is getting 872 degrees of freedom, we have demonstrated that the reported findings in regards to this specific linear regression and comparison of EMMs is legitimate and accurate.
+
+# Figure 
+
+The figure that I am going to attempt to replicate is figure 2 of the paper. Let's do it!
+
+The figure includes two histograms with fish length on the x axis and frequency on the y. The first depicts length derived from otoliths dated to between the years 950 and 1900. This can likely be replicated using data from the cod_data1 dataset, after filtering for only otoliths from 950 to 1900. The second histogram is derived from cod lengths recorded in a commercial hook and line fishery, which I do not have access to, as it is not on dryad. It must be a pretty large data set as well, because the modal length (60 cm) appears to have over 1500 occurrences. 
+
+Because I do not have access to that data, I will only try to replicate the top histogram. 
+
+First, let's manipulate the data so that it only includes cod from the years 950-1900
+```{r}
+cod_hist_data <- subset(cod_data1, Year >= 950 & Year <= 1900)
+```
+Now let's make the histogram.
+```{r}
+cod_hist <- ggplot(data = cod_hist_data, mapping = aes(x = Length_cm))+
+  geom_histogram(fill = "lightblue", color = "black")+ #makes light blue bars with black borders. 
+  theme_bw()+ #gets rid of background greyness 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.title.x = element_text (size = 25), axis.title.y = element_text (size = 25))+ #gets rid of the background grid lines, and sets the size of the axis labels to 25
+  labs(x = "Fish length (cm)", y = "Frequency")+ #makes axis labels
+  scale_x_continuous(breaks = c(40,60,80,100,120))+ #manually sets the increments on the x axis
+  scale_y_continuous(breaks = c(0,10,20,30,40))+ #manually sets the increments on the y axis
+  annotate("text", x = 40, y = 40, label = "A", size = 10)+ #places the letter A in the top left
+  annotate("text", x = 110, y = 40, label = "950-1900", size = 10) #places the years in the top right
+cod_hist
+```
+This was my initial attempt at the histogram, and it's super close, but there's something off about the frequency. I have multiple bars that go over 30 in frequency, while the paper's plot only has 1 bar that seems to come close. Upon further inspection, I suspect that my plot and the paper's plot may be "binning" the data differently, because the paper's plot has more bars than mine. Fixing this might also fix the frequency problem. Let's try.
+
+Unfortunately, the methods section doesn't tell us specifics about the histogram. But if we look closely, it looks like there are approximately 10 bins between 40 and 60 on the graph. This means each bin should be width 2. But the bins seem to be split by the tick marks (ie. the tick mark for 40 is right in the middle of a bin, meaning that that bin is likely 39-41). With this information, we should be able to manually adjust our bins to match the plot from the paper. 
+```{r}
+cod_hist2 <- ggplot(data = cod_hist_data, mapping = aes(x = Length_cm))+
+  geom_histogram(fill = "lightblue", color = "black", binwidth = 2)+ #makes light blue bars with black borders. ADJUSTED BINS HERE.
+  theme_bw()+ #gets rid of background greyness 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.title.x = element_text (size = 25), axis.title.y = element_text (size = 25))+ #gets rid of the background grid lines, and sets the size of the axis labels to 25
+  labs(x = "Fish length (cm)", y = "Frequency")+ #makes axis labels
+  scale_x_continuous(breaks = c(40,60,80,100,120))+ #manually sets the increments on the x axis
+  scale_y_continuous(breaks = c(0,10,20,30))+ #manually sets the increments on the y axis
+  annotate("text", x = 40, y = 30, label = "A", size = 10)+ #places the letter A in the top left
+  annotate("text", x = 110, y = 30, label = "950-1900", size = 10) #places the years in the top right
+cod_hist2
+
+```
+
+
+This looks pretty good to me. Let's compare it side by side with the actual figure from the paper. 
+
+<img src="https://github.com/matteofinnerty/mfinn13-BI588-Replication/blob/main/img/figure2.png" width="200px"/>
+
+
+
+
