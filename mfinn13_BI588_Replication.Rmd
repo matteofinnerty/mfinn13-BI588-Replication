@@ -148,6 +148,8 @@ cod_hist
 This was my initial attempt at the histogram, and it's super close, but there's something off about the frequency. I have multiple bars that go over 30 in frequency, while the paper's plot only has 1 bar that seems to come close. Upon further inspection, I suspect that my plot and the paper's plot may be "binning" the data differently, because the paper's plot has more bars than mine. Fixing this might also fix the frequency problem. Let's try.
 
 Unfortunately, the methods section doesn't tell us specifics about the histogram. But if we look closely, it looks like there are approximately 10 bins between 40 and 60 on the graph. This means each bin should be width 2. But the bins seem to be split by the tick marks (ie. the tick mark for 40 is right in the middle of a bin, meaning that that bin is likely 39-41). With this information, we should be able to manually adjust our bins to match the plot from the paper. 
+
+Oh, also the figure needs a vertical line at x = 60, which represents the modal fish length of the modern fish, according to the figure caption.
 ```{r}
 cod_hist2 <- ggplot(data = cod_hist_data, mapping = aes(x = Length_cm))+
   geom_histogram(fill = "lightblue", color = "black", binwidth = 2)+ #makes light blue bars with black borders. ADJUSTED BINS HERE.
@@ -157,15 +159,16 @@ cod_hist2 <- ggplot(data = cod_hist_data, mapping = aes(x = Length_cm))+
   scale_x_continuous(breaks = c(40,60,80,100,120))+ #manually sets the increments on the x axis
   scale_y_continuous(breaks = c(0,10,20,30))+ #manually sets the increments on the y axis
   annotate("text", x = 40, y = 30, label = "A", size = 10)+ #places the letter A in the top left
-  annotate("text", x = 110, y = 30, label = "950-1900", size = 10) #places the years in the top right
+  annotate("text", x = 110, y = 30, label = "950-1900", size = 10)+ #places the years in the top right
+  geom_vline(xintercept = 60, size = 1) #a vertical line at 60, which i had forgotten about
 cod_hist2
 
 ```
 
 
-This looks pretty good to me. Let's compare it side by side with the actual figure from the paper. 
+This looks pretty good to me. Let's compare it side by side with the actual figure from the paper (the top one of the two).
 
-<img src="https://github.com/matteofinnerty/mfinn13-BI588-Replication/blob/main/img/figure2.png" width="200px"/>
+<img src="img/figure2.png" width="200px"/>
 
 
 
